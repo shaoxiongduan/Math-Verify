@@ -306,8 +306,7 @@ gsm8k_lighteval = [
                     pred_extraction_target=(
                         LatexExtractionConfig(),
                         ExprExtractionConfig(),
-                    ),
-                    fallback_mode="first_match",
+                    )
                 )
             ),
         ],
