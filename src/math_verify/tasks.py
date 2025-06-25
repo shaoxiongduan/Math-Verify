@@ -41,18 +41,8 @@ def as_lighteval_metric(
 
 
 def math_hard_prompt_function(x: dict, task_name: str) -> Doc:
-    if x.get("__few_shots"):
-        index = x["__index"]
-        few_shot_doc = (
-            MATH_HARD_FEW_SHOTS[index]
-            if index < len(MATH_HARD_FEW_SHOTS)
-            else MATH_HARD_FEW_SHOTS[-1]
-        )
-        answer = few_shot_doc["answer"]
-        question = few_shot_doc["question"]
-    else:
-        answer = str(x["solution"])
-        question = x["problem"]
+    answer = str(x["solution"])
+    question = x["problem"]
 
     query = dedent(
         f"""\
@@ -66,18 +56,8 @@ Step-by-Step Answer:\
 
 
 def math_prompt_function(x: dict, task_name: str) -> Doc:
-    if x.get("__few_shots"):
-        index = x["__index"]
-        few_shot_doc = (
-            MATH_HARD_FEW_SHOTS[index]
-            if index < len(MATH_HARD_FEW_SHOTS)
-            else MATH_HARD_FEW_SHOTS[-1]
-        )
-        answer = few_shot_doc["answer"]
-        question = few_shot_doc["question"]
-    else:
-        answer = str(x["answer"])
-        question = x["problem"]
+    answer = str(x["answer"])
+    question = x["problem"]
 
     query = dedent(
         f"""\
@@ -91,18 +71,8 @@ Step-by-Step Answer:\
 
 
 def math_aime24_prompt_function(x: dict, task_name: str) -> Doc:
-    if x.get("__few_shots"):
-        index = x["__index"]
-        few_shot_doc = (
-            MATH_HARD_FEW_SHOTS[index]
-            if index < len(MATH_HARD_FEW_SHOTS)
-            else MATH_HARD_FEW_SHOTS[-1]
-        )
-        answer = few_shot_doc["answer"]
-        question = few_shot_doc["question"]
-    else:
-        answer = str(x["reference_solution"])
-        question = x["problem"]
+    answer = str(x["reference_solution"])
+    question = x["problem"]
 
     query = dedent(
         f"""\
@@ -116,18 +86,8 @@ Step-by-Step Answer:\
 
 
 def math_amc23_prompt_function(x: dict, task_name: str) -> Doc:
-    if x.get("__few_shots"):
-        index = x["__index"]
-        few_shot_doc = (
-            MATH_HARD_FEW_SHOTS[index]
-            if index < len(MATH_HARD_FEW_SHOTS)
-            else MATH_HARD_FEW_SHOTS[-1]
-        )
-        answer = few_shot_doc["answer"]
-        question = few_shot_doc["question"]
-    else:
-        answer = str(x["answer"])
-        question = x["question"]
+    answer = str(x["answer"])
+    question = x["question"]
 
     query = dedent(
         f"""\
@@ -140,18 +100,8 @@ Step-by-Step Answer:\
 
 
 def gsm8k_prompt_function(x: dict, task_name: str) -> Doc:
-    if x.get("__few_shots"):
-        index = x["__index"]
-        few_shot_doc = (
-            GSM8K_FEW_SHOTS[index]
-            if index < len(GSM8K_FEW_SHOTS)
-            else GSM8K_FEW_SHOTS[-1]
-        )
-        answer = few_shot_doc["answer"]
-        question = few_shot_doc["question"]
-    else:
-        answer = f"{x['answer'].split('####')[-1].strip()}"
-        question = x["question"]
+    answer = f"{x['answer'].split('####')[-1].strip()}"
+    question = x["question"]
 
     query = dedent(
         f"""\
@@ -164,6 +114,19 @@ Step-by-Step Answer:\
     return Doc(query=query, choices=choices, gold_index=0)
 
 
+def create_few_shot_examples():
+    """Create few-shot examples that lighteval can use"""
+    few_shot_docs = []
+    for shot in MATH_HARD_FEW_SHOTS:
+        doc = Doc(
+            query=f"Question: {shot['question']}\nStep-by-Step Answer:",
+            choices=[shot['answer']],
+            gold_index=0
+        )
+        few_shot_docs.append(doc)
+    return few_shot_docs
+
+
 math_hard_lighteval = [
     LightevalTaskConfig(
         name=f"math_hard:{subset}",
@@ -172,7 +135,6 @@ math_hard_lighteval = [
         hf_repo="lighteval/MATH-Hard",
         hf_subset=subset,
         evaluation_splits=["test"],
-        few_shots_split="train",
         generation_size=1024,
         metric=[
             as_lighteval_metric(
@@ -210,7 +172,6 @@ math_500_lighteval = [
         hf_repo="HuggingFaceH4/MATH-500",
         hf_subset="default",
         evaluation_splits=["test"],
-        few_shots_split="test",
         generation_size=1024,
         metric=[
             as_lighteval_metric(
@@ -240,7 +201,6 @@ aime24_lighteval = [
         hf_repo="zwhe99/aime24",
         hf_subset="default",
         evaluation_splits=["test"],
-        few_shots_split="test",
         generation_size=1024,
         metric=[
             as_lighteval_metric(
@@ -268,7 +228,6 @@ amc23_lighteval = [
         hf_subset="default",
         hf_filter=lambda x: len(x["question"].strip()) > 0,
         evaluation_splits=["test"],
-        few_shots_split="test",
         generation_size=1024,
         metric=[
             as_lighteval_metric(
@@ -296,7 +255,6 @@ gsm8k_lighteval = [
         hf_subset="main",
         hf_filter=lambda x: len(x["question"].strip()) > 0,
         evaluation_splits=["test"],
-        few_shots_split="test",
         generation_size=1024,
         stop_sequence=["\nQuestion:", "\nProblem:", "\nquestion:", "\nproblem:"],
         metric=[
@@ -310,6 +268,8 @@ gsm8k_lighteval = [
                 )
             ),
         ],
+        trust_dataset=True,
+        version=0,
     )
 ]
 
