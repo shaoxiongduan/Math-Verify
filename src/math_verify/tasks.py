@@ -185,61 +185,78 @@ def create_maj_at_n_metric(
             else:
                 predictions = predictions[:n]
         
-        # Use the math_metric function to extract predictions
-        math_eval_fn = math_metric(
-            gold_extraction_target=gold_extraction_target,
-            pred_extraction_target=pred_extraction_target,
-        )
+        # Parse the gold answer once
+        from math_verify.parser import parse
+        parsed_golds = parse(golds[0], gold_extraction_target)
         
+        if not parsed_golds:
+            logger.warning(f"Failed to parse gold answer: {golds[0]}")
+            return 0.0
+        
+        # Extract and parse all predictions
         extracted_predictions = []
-        all_extracted_predictions = []
-        all_extracted_golds = []
+        all_parsed_predictions = []
         
-        # Extract all predictions
         for pred in predictions:
-            _, extraction_result = math_eval_fn(golds, [pred])
-            if extraction_result:
-                # extraction_result is a tuple of (golds, preds)
-                all_extracted_golds.extend(extraction_result[0])  # gold extractions
-                all_extracted_predictions.extend(extraction_result[1])  # pred extractions
-                if extraction_result[1]:  # if there are extracted predictions
-                    extracted_predictions.append(extraction_result[1][0])  # use first extracted prediction
-                else:
-                    extracted_predictions.append(pred.strip())
+            if not pred.strip():
+                extracted_predictions.append("")
+                continue
+                
+            # Parse the prediction
+            parsed_preds = parse(pred, pred_extraction_target)
+            
+            if parsed_preds:
+                # Use the first successfully parsed prediction
+                all_parsed_predictions.append(parsed_preds[0])
+                extracted_predictions.append(str(parsed_preds[0]))
             else:
+                # If parsing fails, use the raw prediction
                 extracted_predictions.append(pred.strip())
         
         # Store extracted predictions for debugging
-        if all_extracted_predictions or all_extracted_golds:
-            if not formatted_doc.specific:
-                formatted_doc.specific = {}
-            formatted_doc.specific["extracted_predictions"] = (all_extracted_golds, all_extracted_predictions)
+        if not formatted_doc.specific:
+            formatted_doc.specific = {}
+        formatted_doc.specific["extracted_predictions"] = ([str(g) for g in parsed_golds], extracted_predictions)
         
-        # Count occurrences of each extracted prediction
+        # Count occurrences of each extracted prediction (use string representation for counting)
         from collections import Counter
         prediction_counts = Counter(extracted_predictions)
         
         if not prediction_counts:
             return 0.0
         
-        # Get the most common prediction
-        most_common_pred, count = prediction_counts.most_common(1)[0]
+        # Get the most common prediction (string representation)
+        most_common_pred_str, count = prediction_counts.most_common(1)[0]
+        
+        # Find the corresponding parsed prediction for verification
+        most_common_parsed_pred = None
+        for i, pred_str in enumerate(extracted_predictions):
+            if pred_str == most_common_pred_str and i < len(all_parsed_predictions):
+                most_common_parsed_pred = all_parsed_predictions[i]
+                break
+        
+        # If we don't have a parsed version, try to parse the string
+        if most_common_parsed_pred is None and most_common_pred_str:
+            parsed_attempt = parse(most_common_pred_str, pred_extraction_target)
+            if parsed_attempt:
+                most_common_parsed_pred = parsed_attempt[0]
         
         # Check if the most common prediction is correct
-        if all_extracted_golds:
-            # Use the extracted gold standard
-            gold_answer = all_extracted_golds[0]
-            # Use the math verification function
+        if most_common_parsed_pred is not None:
+            # Use the math verification function with parsed expressions
             try:
                 from math_verify.grader import verify
-                is_correct = verify(gold_answer, most_common_pred, precision=6)
-            except Exception:
+                is_correct = any(
+                    verify(gold, most_common_parsed_pred, numeric_precision=6) 
+                    for gold in parsed_golds
+                )
+            except Exception as e:
+                logger.warning(f"Error in verify function: {e}")
                 # Fallback to string comparison
-                is_correct = (most_common_pred == gold_answer)
+                is_correct = (most_common_pred_str in [str(g) for g in parsed_golds])
         else:
-            # Fallback: use the original gold and math_eval_fn
-            result, _ = math_eval_fn(golds, [most_common_pred])
-            is_correct = (result == 1.0)
+            # If we couldn't parse the most common prediction, it's incorrect
+            is_correct = False
         
         return 1.0 if is_correct else 0.0
     
