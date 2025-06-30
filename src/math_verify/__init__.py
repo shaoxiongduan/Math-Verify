@@ -11,6 +11,9 @@ from math_verify.parser import (
     parse,
 )
 
+# Import the tasks table for lighteval
+from math_verify.tasks import TASKS_TABLE
+
 __all__ = [
     "parse",
     "verify",
@@ -19,4 +22,5 @@ __all__ = [
     "LatexExtractionConfig",
     "StringExtractionConfig",
     "LatexNormalizationConfig",
+    "TASKS_TABLE",
 ]

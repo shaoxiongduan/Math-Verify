@@ -61,6 +61,11 @@ def math_metric(
         ]
         extracted_golds = [parse(gold, gold_extraction_target) for gold in golds]
 
+        # Debug logging for gold extraction issues
+        if any(len(g) == 0 for g in extracted_golds):
+            logger.warning(f"Failed to extract from gold(s): {golds}")
+            logger.warning(f"Gold extraction targets: {gold_extraction_target}")
+
         # Assert on empty gold and warn on empty pred
         if any(len(g) == 0 for g in extracted_golds):
             raise ValueError(
@@ -78,10 +83,21 @@ def math_metric(
             str_preds = get_str_preds_with_timeout(
                 extracted_predictions, extracted_golds
             )
-        except Exception:
+        except Exception as e:
             logger.warning(
-                "Timeout when adding extracted predictions and golds to specific"
+                f"Timeout when adding extracted predictions and golds to specific: {e}"
             )
+
+        # If str_preds is None, create a fallback with empty golds
+        if str_preds is None:
+            try:
+                # Try to create a basic string representation
+                golds_str = [str(gold) for golds in extracted_golds for gold in golds]
+                preds_str = [str(pred) for preds in extracted_predictions for pred in preds]
+                str_preds = (golds_str, preds_str)
+            except Exception:
+                logger.warning("Failed to create fallback string representations")
+                str_preds = ([], [])
 
         return (
             aggregation_function(
